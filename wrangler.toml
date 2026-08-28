@@ -2,3 +2,7 @@ name = "talktomemcp"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+
+[[services]]
+binding = "TEXT_API"
+service = "talktome-text-api"

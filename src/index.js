@@ -35,11 +35,11 @@ const TOOLS = [
   },
 ];
 
-async function setText(bearerToken, args) {
+async function setText(fetcher, bearerToken, args) {
   if (!bearerToken) {
     return { isError: true, content: [{ type: "text", text: NO_TOKEN_MESSAGE }] };
   }
-  const response = await fetch(`${UPSTREAM_BASE_URL}/text`, {
+  const response = await fetcher.fetch(`${UPSTREAM_BASE_URL}/text`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${bearerToken}`,
@@ -56,8 +56,8 @@ async function setText(bearerToken, args) {
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 }
 
-async function getText() {
-  const response = await fetch(`${UPSTREAM_BASE_URL}/text`, {
+async function getText(fetcher) {
+  const response = await fetcher.fetch(`${UPSTREAM_BASE_URL}/text`, {
     method: "GET",
   });
   const result = await response.json();
@@ -69,7 +69,7 @@ async function getText() {
   return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 }
 
-function createMcpServer(bearerToken) {
+function createMcpServer(fetcher, bearerToken) {
   const server = new Server(
     { name: "talktomemcp", version: "1.0.0" },
     { capabilities: { tools: {} } }
@@ -84,9 +84,9 @@ function createMcpServer(bearerToken) {
     try {
       switch (name) {
         case "set_text":
-          return await setText(bearerToken, args);
+          return await setText(fetcher, bearerToken, args);
         case "get_text":
-          return await getText();
+          return await getText(fetcher);
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -102,11 +102,17 @@ function createMcpServer(bearerToken) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const bearerToken = url.searchParams.get("bearer_token");
 
-    const server = createMcpServer(bearerToken);
+    // Use the Service Binding to reach the upstream Worker directly.
+    // A plain fetch() by workers.dev URL is blocked here with Cloudflare
+    // error 1042 (Workers cannot fetch another Worker on workers.dev
+    // within the same account via the public edge).
+    const fetcher = env.TEXT_API ?? { fetch };
+
+    const server = createMcpServer(fetcher, bearerToken);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
